@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR 3D Object Viewer</title>
+  <!-- Google model-viewer for high-fidelity WebAR -->
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(16, 23, 41, 0.85);
+      --card-border: rgba(56, 189, 248, 0.2);
+      --accent: #00f0ff;
+      --accent-glow: rgba(0, 240, 255, 0.4);
+      --neon-purple: #a855f7;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 15% 20%, rgba(0, 240, 255, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 40%),
+        linear-gradient(to bottom, #090d16, #0e1526);
+      color: var(--text);
+      font-family: 'Space Grotesk', -apple-system, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      background: rgba(11, 15, 25, 0.7);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #00f0ff, #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .brand-icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: #090d16;
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(0, 240, 255, 0.12);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* 3D Model Viewer Stage */
+    .viewer-container {
+      width: 100%;
+      height: 60vh;
+      min-height: 420px;
+      position: relative;
+      background: radial-gradient(circle at center, rgba(30, 41, 59, 0.5) 0%, rgba(11, 15, 25, 0.8) 70%);
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    model-viewer {
+      width: 100%;
+      height: 100%;
+      --poster-color: transparent;
+      outline: none;
+    }
+
+    /* AR Button Override */
+    #ar-button {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #00f0ff 0%, #3b82f6 100%);
+      color: #050b14;
+      font-weight: 700;
+      font-size: 1rem;
+      font-family: 'Space Grotesk', sans-serif;
+      border: none;
+      border-radius: 50px;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.5), 0 4px 15px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 20;
+    }
+
+    #ar-button:hover, #ar-button:active {
+      transform: translateX(-50%) scale(1.04);
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.8);
+    }
+
+    #ar-button svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* AR Prompt / Status */
+    .ar-hint {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    /* Viewer Controls Bar */
+    .controls-overlay {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .control-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: all 0.2s ease;
+    }
+
+    .control-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Details Section */
+    .details-section {
+      padding: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .model-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .model-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .model-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .spec-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 14px;
+      text-align: left;
+    }
+
+    .spec-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .spec-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    /* Device Instructions */
+    .guide-card {
+      background: rgba(16, 23, 41, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+
+    .guide-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .guide-steps {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .guide-steps li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(0, 240, 255, 0.15);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Loading / Poster */
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      position: absolute;
+      top: 0;
+      left: 0;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00f0ff, #a855f7);
+      transition: width 0.3s ease;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+          <line x1="12" y1="22.08" x2="12" y2="12"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">AURA AR</div>
+      </div>
+    </div>
+    <div class="brand-badge" id="platform-badge">Universal AR</div>
+  </header>
+
+  <!-- Main Experience -->
+  <main>
+    <div class="viewer-container">
+      <div class="progress-bar">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+
+      <div class="ar-hint">
+        <span class="pulse-dot"></span>
+        <span>Drag to rotate • Pinch to zoom</span>
+      </div>
+
+      <div class="controls-overlay">
+        <button class="control-btn" id="btn-reset-view" title="Reset Camera">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+        <button class="control-btn" id="btn-autorotate" title="Toggle Auto-Rotate">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Google Model Viewer component -->
+      <model-viewer
+        id="ar-viewer"
+        src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+        ios-src="https://modelviewer.dev/shared-assets/models/Astronaut.usdz"
+        ar
+        ar-modes="webxr scene-viewer quick-look"
+        ar-scale="auto"
+        camera-controls
+        auto-rotate
+        rotation-per-second="30deg"
+        shadow-intensity="1.2"
+        shadow-softness="0.8"
+        environment-image="neutral"
+        exposure="1.0"
+        interaction-prompt="none"
+        alt="Reconstructed 3D Physical Object">
+        
+        <button slot="ar-button" id="ar-button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>VIEW IN YOUR SPACE (AR)</span>
+        </button>
+
+      </model-viewer>
+    </div>
+
+    <!-- Scanned Object Specs & Metadata -->
+    <div class="details-section">
+      <div class="model-header">
+        <div>
+          <h1 class="model-name" id="object-name">Captured 3D Object</h1>
+          <div class="model-time" id="object-time">Reconstructed via Multi-View Continuous Scan</div>
+        </div>
+      </div>
+
+      <div class="specs-grid">
+        <div class="spec-card">
+          <div class="spec-label">Reconstruction</div>
+          <div class="spec-value" id="spec-method">Neural PBR</div>
+        </div>
+        <div class="spec-card">
+          <div class="spec-label">Keyframes</div>
+          <div class="spec-value" id="spec-frames">72 Angles</div>
+        </div>
+        <div class="spec-card">
+          <div class="spec-label">Mesh Density</div>
+          <div class="spec-value" id="spec-polys">48.2k Polys</div>
+        </div>
+        <div class="spec-card">
+          <div class="spec-label">PBR Textures</div>
+          <div class="spec-value">2048 × 2048</div>
+        </div>
+        <div class="spec-card">
+          <div class="spec-label">AR Formats</div>
+          <div class="spec-value">GLB / USDZ</div>
+        </div>
+      </div>
+
+      <!-- AR Placement Guidance -->
+      <div class="guide-card">
+        <div class="guide-title">
+          <svg width="20" height="20" fill="none" stroke="#00f0ff" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span>How to place this object in Augmented Reality</span>
+        </div>
+        <ul class="guide-steps">
+          <li>
+            <div class="step-num">1</div>
+            <div>Tap the blue <strong>"VIEW IN YOUR SPACE (AR)"</strong> button above.</div>
+          </li>
+          <li>
+            <div class="step-num">2</div>
+            <div>Point your camera at a flat surface (floor, table, desk) and move your phone slowly.</div>
+          </li>
+          <li>
+            <div class="step-num">3</div>
+            <div>The exact 3D object will anchor in your real environment with real-time lighting and shadows!</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    AURA AR Scanner • Continuous Spatial Capture & Instant WebAR Sharing
+  </footer>
+
+  <script>
+    const viewer = document.getElementById('ar-viewer');
+    const progressFill = document.getElementById('progress-fill');
+    const autoRotateBtn = document.getElementById('btn-autorotate');
+    const resetViewBtn = document.getElementById('btn-reset-view');
+    const platformBadge = document.getElementById('platform-badge');
+
+    // Parse URL query parameters
+    const params = new URLSearchParams(window.location.search);
+    const modelSrc = params.get('glb') || params.get('model');
+    const usdzSrc = params.get('usdz');
+    const objectName = params.get('name');
+    const frameCount = params.get('frames');
+
+    if (modelSrc) {
+      viewer.src = modelSrc;
+    }
+    if (usdzSrc) {
+      viewer.setAttribute('ios-src', usdzSrc);
+    }
+    if (objectName) {
+      document.getElementById('object-name').innerText = objectName;
+      document.title = objectName + ' • AR 3D Viewer';
+    }
+    if (frameCount) {
+      document.getElementById('spec-frames').innerText = frameCount + ' Angles';
+    }
+
+    // Detect platform
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /Android/.test(navigator.userAgent);
+    if (isIOS) {
+      platformBadge.innerText = 'Apple AR Quick Look';
+    } else if (isAndroid) {
+      platformBadge.innerText = 'Google Scene Viewer';
+    } else {
+      platformBadge.innerText = 'WebXR 3D';
+    }
+
+    // Progress bar handler
+    viewer.addEventListener('progress', (e) => {
+      const progress = e.detail.totalProgress * 100;
+      progressFill.style.width = progress + '%';
+      if (progress >= 100) {
+        setTimeout(() => { progressFill.style.opacity = '0'; }, 400);
+      }
+    });
+
+    // Auto rotate toggle
+    let isAutoRotating = true;
+    autoRotateBtn.addEventListener('click', () => {
+      isAutoRotating = !isAutoRotating;
+      if (isAutoRotating) {
+        viewer.setAttribute('auto-rotate', '');
+        autoRotateBtn.style.color = '#00f0ff';
+      } else {
+        viewer.removeAttribute('auto-rotate');
+        autoRotateBtn.style.color = '#f8fafc';
+      }
+    });
+
+    // Reset camera view
+    resetViewBtn.addEventListener('click', () => {
+      viewer.cameraOrbit = '0deg 75deg 105%';
+      viewer.jumpCameraToGoal();
+    });
+  </script>
+</body>
+</html>
